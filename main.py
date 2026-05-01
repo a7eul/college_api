@@ -57,8 +57,13 @@ class ScheduleItem(BaseModel):
     group_id: int
 
 def get_db_connection():
+    database_url = os.getenv("DATABASE_URL")
+    
+    if not database_url:
+        raise Exception("DATABASE_URL not set in environment variables!")
+    
     return psycopg2.connect(
-        os.getenv("DATABASE_URL"),
+        dsn=database_url,
         cursor_factory=RealDictCursor
     )
 
