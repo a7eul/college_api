@@ -11,8 +11,17 @@ from dotenv import load_dotenv
 import shutil
 from pathlib import Path
 import time
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Разрешаем запросы с любых доменов
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app = FastAPI(title="College Messenger API")
 app.add_middleware(
