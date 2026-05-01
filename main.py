@@ -15,23 +15,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # Разрешаем запросы с любых доменов
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 app = FastAPI(title="College Messenger API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 class UserLogin(BaseModel):
     login: str
     password: str
