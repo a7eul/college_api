@@ -219,8 +219,7 @@ def get_messages(chat_id: int, limit: int = 50):
         for row in results:
             msg = dict(row)
             if msg.get('created_at'):
-                utc_time = msg['created_at'].replace(tzinfo=timezone.utc)
-                msg['created_at'] = utc_time.isoformat()
+                msg['created_at'] = msg['created_at'].isoformat() + 'Z'
             msg['image_url'] = msg.get('image_url') or ''
             msg['file_url'] = msg.get('file_url') or ''
             msg['file_name'] = msg.get('file_name') or ''
@@ -255,7 +254,7 @@ def send_message(chat_id: int, sender_id: int = Form(...), content: str = Form(.
         
         return {
             "id": result['id'],
-            "created_at": result['created_at'].isoformat(),
+            "created_at": result['created_at'].isoformat() + 'Z',
             "success": True
         }
     except Exception as e:
@@ -535,7 +534,7 @@ async def send_image_message(
         
         return {
             "id": result['id'],
-            "created_at": result['created_at'].isoformat() if result['created_at'] else None,
+            "created_at": result['created_at'].isoformat() + 'Z' if result['created_at'] else None,
             "image_url": image_url,
             "success": True
         }
@@ -585,7 +584,7 @@ async def send_file_message(
             
             return {
                 "id": result['id'],
-                "created_at": result['created_at'].isoformat() if result['created_at'] else None,
+                "created_at": result['created_at'].isoformat() + 'Z' if result['created_at'] else None,
                 "file_url": file_url,
                 "file_name": file_name,
                 "file_size": file_size,
