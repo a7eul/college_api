@@ -552,8 +552,7 @@ async def send_file_message(
     file: UploadFile = File(...),
     file_name: str = Form(...)
 ):
-    # 🔥 ДОБАВЛЕНО: Логирование для отладки
-    print(f"📥 Received file upload request:")
+    print(f"Received file upload request:")
     print(f"   - chat_id: {chat_id}")
     print(f"   - sender_id: {sender_id}")
     print(f"   - file_name from form: {file_name}")
@@ -562,7 +561,6 @@ async def send_file_message(
     print(f"   - file.size: {file.size}")
     
     try:
-        # ✅ Загружаем в Cloudinary
         file_url = upload_to_cloudinary(file, "chat_files")
         file_size = file.size if file.size else 0
         
@@ -580,7 +578,7 @@ async def send_file_message(
             result = cursor.fetchone()
             conn.commit()
             
-            print(f"✅ File uploaded successfully: {file_url}")
+            print(f"File uploaded successfully: {file_url}")
             
             return {
                 "id": result['id'],
@@ -592,14 +590,14 @@ async def send_file_message(
             }
         except Exception as e:
             conn.rollback()
-            print(f"❌ Database error: {e}")
+            print(f"Database error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             cursor.close()
             conn.close()
             
     except Exception as e:
-        print(f"❌ Upload error: {e}")
+        print(f"Upload error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
