@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from datetime import date
 from typing import List, Optional
 from pydantic import BaseModel
@@ -8,15 +7,24 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 from dotenv import load_dotenv
-import shutil
 from pathlib import Path
 import time
-from fastapi.middleware.cors import CORSMiddleware
+import cloudinary
+import cloudinary.uploader
 
 load_dotenv()
 
+# 🔥 Настройка Cloudinary
+# Ключи берутся из переменных окружения Render (см. инструкцию ниже)
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"), 
+    api_key=os.getenv("CLOUDINARY_API_KEY"), 
+    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+    secure=True  # ✅ Всегда использовать HTTPS
+)
 
 app = FastAPI(title="College Messenger API")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -24,6 +32,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Pydantic модели
 class UserLogin(BaseModel):
     login: str
     password: str
@@ -56,6 +66,7 @@ class ScheduleItem(BaseModel):
     room: Optional[str] = None
     group_id: int
 
+# Подключение к БД
 def get_db_connection():
     database_url = os.getenv("DATABASE_URL")
     
@@ -67,13 +78,23 @@ def get_db_connection():
         cursor_factory=RealDictCursor
     )
 
-UPLOAD_DIR = Path("avatars")
-FILES_DIR = Path("files")
-FILES_DIR.mkdir(exist_ok=True)
-UPLOAD_DIR.mkdir(exist_ok=True)
-app.mount("/avatars", StaticFiles(directory="avatars"), name="avatars")
-app.mount("/files", StaticFiles(directory="files"), name="files")
+# 🔄 Вспомогательная функция для загрузки в Cloudinary
+def upload_to_cloudinary(file: UploadFile, folder: str) -> str:
+    """Загружает файл в Cloudinary и возвращает публичную ссылку"""
+    try:
+        # Загружаем файл
+        result = cloudinary.uploader.upload(
+            file.file.read(),
+            folder=folder,
+            resource_type="auto"  # auto определяет: картинка, видео или файл
+        )
+        # Возвращаем постоянную безопасную ссылку (HTTPS)
+        return result['secure_url']
+    except Exception as e:
+        print(f"❌ Cloudinary upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
+# 🌐 Роуты
 @app.get("/")
 def read_root():
     return {"message": "API работает!"}
@@ -109,7 +130,7 @@ def get_user(user_id: int):
     raise HTTPException(status_code=404, detail="Пользователь не найден")
 
 @app.put("/users/{user_id}")
-def update_user(user_id: int, user_data: UserUpdate):
+def update_user(user_id: int, user_ UserUpdate):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -126,6 +147,7 @@ def update_user(user_id: int, user_data: UserUpdate):
         cursor.close()
         conn.close()
 
+# 🖼️ Загрузка аватара пользователя — CLOUDINARY
 @app.post("/users/{user_id}/avatar")
 async def upload_avatar(user_id: int, file: UploadFile = File(...)):
     allowed_extensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"]
@@ -134,14 +156,10 @@ async def upload_avatar(user_id: int, file: UploadFile = File(...)):
     if file_extension not in allowed_extensions:
         raise HTTPException(status_code=400, detail=f"Только: {', '.join(allowed_extensions)}")
     
-    filename = f"{user_id}{file_extension}"
-    filepath = UPLOAD_DIR / filename
+    # ✅ Загружаем в Cloudinary
+    avatar_url = upload_to_cloudinary(file, "user_avatars")
     
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    avatar_url = f"https://college-api-5wro.onrender.com/avatars/{filename}"
-    
+    # Сохраняем ссылку в базу
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET avatar_url = %s WHERE id = %s", (avatar_url, user_id))
@@ -247,7 +265,6 @@ def send_message(chat_id: int, sender_id: int = Form(...), content: str = Form(.
         cursor.close()
         conn.close()
 
-
 @app.get("/chats/{chat_id}/info")
 def get_chat_info(chat_id: int):
     conn = get_db_connection()
@@ -279,6 +296,7 @@ def get_chat_members(chat_id: int):
     conn.close()
     return [dict(row) for row in results]
 
+# 🖼️ Загрузка аватара чата — CLOUDINARY
 @app.put("/chats/{chat_id}/avatar")
 async def update_chat_avatar(chat_id: int, file: UploadFile = File(...)):
     allowed_extensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"]
@@ -287,13 +305,8 @@ async def update_chat_avatar(chat_id: int, file: UploadFile = File(...)):
     if file_extension not in allowed_extensions:
         raise HTTPException(status_code=400, detail="Только изображения")
     
-    filename = f"chat_{chat_id}{file_extension}"
-    filepath = UPLOAD_DIR / filename
-    
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    avatar_url = f"http://127.0.0.1:8000/avatars/{filename}"
+    # ✅ Загружаем в Cloudinary
+    avatar_url = upload_to_cloudinary(file, "chat_avatars")
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -494,6 +507,7 @@ def get_shared_chats(user1_id: int, user2_id: int):
     conn.close()
     return [dict(row) for row in results]
 
+# 🖼️ Отправка фото в чат — CLOUDINARY
 @app.post("/chats/{chat_id}/messages/image")
 async def send_image_message(
     chat_id: int,
@@ -506,13 +520,8 @@ async def send_image_message(
     if file_extension not in allowed_extensions:
         raise HTTPException(status_code=400, detail="Только изображения")
     
-    filename = f"msg_{chat_id}_{sender_id}_{int(time.time())}{file_extension}"
-    filepath = UPLOAD_DIR / filename
-    
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(image.file, buffer)
-    
-    image_url = f"http://127.0.0.1:8000/avatars/{filename}"
+    # ✅ Загружаем в Cloudinary
+    image_url = upload_to_cloudinary(image, "chat_images")
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -541,6 +550,7 @@ async def send_image_message(
         cursor.close()
         conn.close()
 
+# 📎 Отправка файла в чат — CLOUDINARY
 @app.post("/chats/{chat_id}/messages/file")
 async def send_file_message(
     chat_id: int,
@@ -548,16 +558,9 @@ async def send_file_message(
     file: UploadFile = File(...),
     file_name: str = Form(...)
 ):
-    timestamp = int(time.time())
-    file_extension = Path(file.filename).suffix.lower() if file.filename else ""
-    safe_filename = f"file_{chat_id}_{sender_id}_{timestamp}{file_extension}"
-    filepath = FILES_DIR / safe_filename
-    
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    file_url = f"http://127.0.0.1:8000/files/{safe_filename}"
-    file_size = filepath.stat().st_size
+    # ✅ Загружаем в Cloudinary
+    file_url = upload_to_cloudinary(file, "chat_files")
+    file_size = file.size if file.size else 0
     
     conn = get_db_connection()
     cursor = conn.cursor()
