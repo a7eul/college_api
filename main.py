@@ -551,34 +551,54 @@ async def send_file_message(
     file: UploadFile = File(...),
     file_name: str = Form(...)
 ):
-    file_url = upload_to_cloudinary(file, "chat_files")
-    file_size = file.size if file.size else 0
+    # 🔥 ДОБАВЛЕНО: Логирование для отладки
+    print(f"📥 Received file upload request:")
+    print(f"   - chat_id: {chat_id}")
+    print(f"   - sender_id: {sender_id}")
+    print(f"   - file_name from form: {file_name}")
+    print(f"   - file.filename: {file.filename}")
+    print(f"   - file.content_type: {file.content_type}")
+    print(f"   - file.size: {file.size}")
     
-    conn = get_db_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute(
-            """
-            INSERT INTO messages (chat_id, sender_id, content, file_url, file_name, file_size) 
-            VALUES (%s, %s, %s, %s, %s, %s) 
-            RETURNING id, created_at
-            """,
-            (chat_id, sender_id, "", file_url, file_name, file_size)
-        )
-        result = cursor.fetchone()
-        conn.commit()
+        # ✅ Загружаем в Cloudinary
+        file_url = upload_to_cloudinary(file, "chat_files")
+        file_size = file.size if file.size else 0
         
-        return {
-            "id": result['id'],
-            "created_at": result['created_at'].isoformat() if result['created_at'] else None,
-            "file_url": file_url,
-            "file_name": file_name,
-            "file_size": file_size,
-            "success": True
-        }
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO messages (chat_id, sender_id, content, file_url, file_name, file_size) 
+                VALUES (%s, %s, %s, %s, %s, %s) 
+                RETURNING id, created_at
+                """,
+                (chat_id, sender_id, "", file_url, file_name, file_size)
+            )
+            result = cursor.fetchone()
+            conn.commit()
+            
+            print(f"✅ File uploaded successfully: {file_url}")
+            
+            return {
+                "id": result['id'],
+                "created_at": result['created_at'].isoformat() if result['created_at'] else None,
+                "file_url": file_url,
+                "file_name": file_name,
+                "file_size": file_size,
+                "success": True
+            }
+        except Exception as e:
+            conn.rollback()
+            print(f"❌ Database error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            cursor.close()
+            conn.close()
+            
     except Exception as e:
-        conn.rollback()
+        print(f"❌ Upload error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        cursor.close()
-        conn.close()
