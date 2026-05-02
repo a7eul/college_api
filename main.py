@@ -11,6 +11,7 @@ from pathlib import Path
 import time
 import cloudinary
 import cloudinary.uploader
+from datetime import timezone
 
 load_dotenv()
 
@@ -218,7 +219,8 @@ def get_messages(chat_id: int, limit: int = 50):
         for row in results:
             msg = dict(row)
             if msg.get('created_at'):
-                msg['created_at'] = msg['created_at'].isoformat()
+                utc_time = msg['created_at'].replace(tzinfo=timezone.utc)
+                msg['created_at'] = utc_time.isoformat()
             msg['image_url'] = msg.get('image_url') or ''
             msg['file_url'] = msg.get('file_url') or ''
             msg['file_name'] = msg.get('file_name') or ''
