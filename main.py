@@ -130,7 +130,7 @@ def get_user(user_id: int):
     raise HTTPException(status_code=404, detail="Пользователь не найден")
 
 @app.put("/users/{user_id}")
-def update_user(user_id: int, user_ UserUpdate):
+def update_user(user_id: int, user_data: UserUpdate):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
