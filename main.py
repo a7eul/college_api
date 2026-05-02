@@ -140,7 +140,7 @@ async def upload_avatar(user_id: int, file: UploadFile = File(...)):
     with open(filepath, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    avatar_url = f"http://127.0.0.1:8000/avatars/{filename}"
+    avatar_url = f"https://college-api-5wro.onrender.com/avatars/{filename}"
     
     conn = get_db_connection()
     cursor = conn.cursor()
